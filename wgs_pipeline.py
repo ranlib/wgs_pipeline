@@ -55,7 +55,9 @@ fq_trimd_ispaired_1 =  os.path.join(output_path, args.sample + "_ispaired_1.fq.g
 fq_trimd_unpaired_1 =  os.path.join(output_path, args.sample + "_unpaired_1.fq.gz")
 fq_trimd_ispaired_2 =  os.path.join(output_path, args.sample + "_ispaired_2.fq.gz")
 fq_trimd_unpaired_2 =  os.path.join(output_path, args.sample + "_unpaired_2.fq.gz")
-os.system(f"trimmomatic PE -threads {args.threads} {fq_clean_1} {fq_clean_2} {fq_trimd_ispaired_1} {fq_trimd_unpaired_1} {fq_trimd_ispaired_2} {fq_trimd_unpaired_2} -phred33 LEADING:20 TRAILING:20 SLIDINGWINDOW:4:20 MINLEN:50")
+trim_summary_file =  os.path.join(output_path, args.sample + "_trim_summary_file.txt")
+trim_log_file =  os.path.join(output_path, args.sample + "_trim_log_file.txt")
+os.system(f"trimmomatic PE -threads {args.threads} --trimlog {trim_log_file} --summary {trim_summary_file} {fq_clean_1} {fq_clean_2} {fq_trimd_ispaired_1} {fq_trimd_unpaired_1} {fq_trimd_ispaired_2} {fq_trimd_unpaired_2} -phred33 LEADING:20 TRAILING:20 SLIDINGWINDOW:4:20 MINLEN:50")
 
 # Map reads with BWA
 bwa_path = os.path.join(args.output_dir,"bwa")
@@ -117,24 +119,64 @@ gene_ids = [
 gb_record = SeqIO.parse(args.genbank, "genbank")
 
 # Get the positions of the genes from the GenBank file
-gene_positions = []
-for feature in gb_record.features:
-    if feature.type == "gene" and feature.qualifiers.get("gene_id") in gene_ids:
-        start = feature.location.start.position
-        end = feature.location.end.position
-        gene_positions.append((start, end))
+gene_positions = {}
+for record in gb_record:
+    for feature in record.features:
+        if feature.type == "gene":
+            genes = feature.qualifiers.get("gene")
+            if genes is not None:
+                for gene in genes:
+                    if gene in gene_names:
+                        start = feature.location.start.position 
+                        end = feature.location.end.position
+                        gene_positions[gene] = (start, end)
 
-print("> gene_positions:")
-print(gene_positions)
+# Write the gene positions to a CSV file
+csv_output_file = "gene_positions.csv"
+with open(csv_output_file, "w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerow(["gene_name", "start_pos", "end_pos"])
+    for gene_name, positions in gene_positions.items():
+        writer.writerow([gene_name, positions[0], positions[1]])
+
+# Read in the VCF file
 vcf_reader = vcfpy.Reader.from_path(vcf_file_filtered)
 
 # Filter the VCF file for the positions of the genes
 filtered_vcf_records = []
 for record in vcf_reader:
-    for pos in gene_positions:
-        if record.POS >= pos[0] and record.POS <= pos[1]:
+    for gene_name, positions in gene_positions.items():
+        if record.POS >= positions[0] and record.POS <= positions[1]:
             filtered_vcf_records.append(record)
 
-# Do something with the filtered VCF records
+# Write the filtered VCF records to a new VCF file
+vcf_output_file = "filtered.vcf"
+vcf_writer = vcfpy.Writer.from_path(vcf_output_file, vcf_reader.header)
 for record in filtered_vcf_records:
-    print(record)
+    vcf_writer.write_record(record)
+
+# Close the VCF writer
+vcf_writer.close()
+
+# Get the positions of the genes from the GenBank file
+# gene_positions = []
+# for feature in gb_record.features:
+#     if feature.type == "gene" and feature.qualifiers.get("gene_id") in gene_ids:
+#         start = feature.location.start.position
+#         end = feature.location.end.position
+#         gene_positions.append((start, end))
+
+# print("> gene_positions:")
+# print(gene_positions)
+# vcf_reader = vcfpy.Reader.from_path(vcf_file_filtered)
+
+# # Filter the VCF file for the positions of the genes
+# filtered_vcf_records = []
+# for record in vcf_reader:
+#     for pos in gene_positions:
+#         if record.POS >= pos[0] and record.POS <= pos[1]:
+#             filtered_vcf_records.append(record)
+
+# # Do something with the filtered VCF records
+# for record in filtered_vcf_records:
+#     print(record)
