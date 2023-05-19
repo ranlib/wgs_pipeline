@@ -4,6 +4,7 @@ references
 temp
 ERR55297
 multiqc_data
+*~
 *.csv
 *.vcf
 *.html
