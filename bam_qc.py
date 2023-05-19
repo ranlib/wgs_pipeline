@@ -12,25 +12,35 @@ args = parser.parse_args()
 if not os.path.exists(args.output):
     os.makedirs(args.output)
 
-# Define paths for intermediate files
-markdups_bam = os.path.join(args.output, 'markdups.bam')
-metrics_file = os.path.join(args.output, 'metrics.txt')
-
 # Step 1: Mark duplicates
+output_mark_duplicates  = os.path.join( args.output, "output_mark_duplicates")
+os.makedirs( output_mark_duplicates, exist_ok = True) 
+markdups_bam = os.path.join(output_mark_duplicates, 'markdups.bam')
+metrics_file = os.path.join(output_mark_duplicates, 'metrics.txt')
 os.system(f"gatk MarkDuplicates -I {args.input} -O {markdups_bam} -M {metrics_file}")
 
 # Step 2: Calculate coverage statistics
-cov_output = os.path.join(args.output, 'coverage')
+output_collect_wgs_metrics = os.path.join(args.output, 'output_collect_wgs_metrics')
+os.makedirs( output_collect_wgs_metrics, exist_ok = True)
+cov_output = os.path.join(output_collect_wgs_metrics, 'coverage.txt')
 os.system(f"gatk CollectWgsMetrics -I {markdups_bam} -O {cov_output} -R {args.reference}")
 
 # Step 3: Generate GC bias metrics
-gc_output = os.path.join(args.output, 'gc_bias')
-os.system(f"gatk CollectGcBiasMetrics -I {markdups_bam} -O {gc_output} -R {args.reference} -CHART {gc_output}.pdf -S {gc_output}.summary")
+output_collect_gc_bias_metrics = os.path.join(args.output, 'output_collect_gc_bias_metrics')
+os.makedirs( output_collect_gc_bias_metrics, exist_ok = True)
+gc_output = os.path.join(output_collect_gc_bias_metrics, 'gc_output.txt')
+gc_output_chart = os.path.join(output_collect_gc_bias_metrics, 'gc_output_chart.pdf')
+gc_output_summary = os.path.join(output_collect_gc_bias_metrics, 'gc_output.summary')
+os.system(f"gatk CollectGcBiasMetrics -I {markdups_bam} -O {gc_output} -R {args.reference} -CHART {gc_output_chart} -S {gc_output_summary}")
 
 # STEP 4: Generate quality control metrics
-qc_output = os.path.join(args.output, 'qc')
+output_collect_multiple_metrics = os.path.join(args.output, 'output_collect_multiple_metrics')
+os.makedirs( output_collect_multiple_metrics, exist_ok = True)
+qc_output = os.path.join(output_collect_multiple_metrics, 'qc') # qc is the suffix
 os.system(f"gatk CollectMultipleMetrics -I {markdups_bam} -O {qc_output} -R {args.reference}")
 
 # Step 5: Generate insert size metrics
-is_output = os.path.join(args.output, 'insert_size')
-os.system(f"gatk CollectInsertSizeMetrics -I {markdups_bam} -O {is_output} -H {is_output}.pdf")
+output_collect_insert_size_metrics = os.path.join(args.output, 'output_collect_insert_size_metrics')
+os.makedirs( output_collect_insert_size_metrics, exist_ok = True)
+is_output = os.path.join(output_collect_insert_size_metrics, 'insert_size.pdf')
+os.system(f"gatk CollectInsertSizeMetrics -I {markdups_bam} -O {is_output} -H {is_output}")
