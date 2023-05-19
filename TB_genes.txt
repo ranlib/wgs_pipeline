@@ -1,0 +1,17 @@
+gyrB
+gyrA
+rpoB
+rplC
+atpE
+rrs
+rrl
+fabG1
+inhA
+tlyA
+katG
+pncA
+eis
+ahpC
+pepQ
+embB
+ethA

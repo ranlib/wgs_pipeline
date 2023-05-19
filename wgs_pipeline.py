@@ -4,20 +4,23 @@ WGS analysis pipeline
 """
 
 import os
+import pathlib
 import argparse
 import vcfpy
+import csv
 from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # Set up argument parser
 parser = argparse.ArgumentParser(description='Whole genome analysis pipeline')
-parser.add_argument('--fastq1', type=str, help='Path to first paired FASTQ file')
-parser.add_argument('--fastq2', type=str, help='Path to secnd paired FASTQ file')
-parser.add_argument('--sample', type=str, help='Sample name')
-parser.add_argument('--genbank', type=str, help='Path to reference genome GenBank file')
-parser.add_argument('--threads', type=int, default=4, help='Number of threads to use (default: 4)')
-parser.add_argument('--output_dir', type=str, help='Path to output directory')
-parser.add_argument('--contaminant-db', type=str, help='Path to contaminant database')
+parser.add_argument('--fastq1', "-1", type=str, help='Path to first paired FASTQ file')
+parser.add_argument('--fastq2', "-2", type=str, help='Path to secnd paired FASTQ file')
+parser.add_argument('--sample', "-s", type=str, help='Sample name')
+parser.add_argument('--genbank', "-g", type=str, help='Path to reference genome GenBank file')
+parser.add_argument('--threads', "-t", type=int, default=4, help='Number of threads to use (default: %(default)i)')
+parser.add_argument('--output_dir', "-o", type=str, help='Path to output directory')
+parser.add_argument('--contaminant-db', "-c", type=str, help='Path to contaminant database')
+parser.add_argument('--genes', "-l", type=str, help='Text file with list of genes, one gene per row')
 args = parser.parse_args()
 
 os.makedirs(args.output_dir, exist_ok =True)
@@ -29,6 +32,9 @@ if not os.path.exists(fasta_file):
         for record in SeqIO.parse(args.genbank, "genbank"):
             seq = SeqRecord(record.seq, record.id, "", "")
             SeqIO.write(seq, f, "fasta")
+
+# index fasta file
+os.system(f"samtools faidx {fasta_file}")
 
 # Create BWA index for reference genome if it doesn't exist
 if not os.path.exists(f"{fasta_file}.bwt"):
@@ -55,9 +61,9 @@ fq_trimd_ispaired_1 =  os.path.join(output_path, args.sample + "_ispaired_1.fq.g
 fq_trimd_unpaired_1 =  os.path.join(output_path, args.sample + "_unpaired_1.fq.gz")
 fq_trimd_ispaired_2 =  os.path.join(output_path, args.sample + "_ispaired_2.fq.gz")
 fq_trimd_unpaired_2 =  os.path.join(output_path, args.sample + "_unpaired_2.fq.gz")
-trim_summary_file =  os.path.join(output_path, args.sample + "_trim_summary_file.txt")
-trim_log_file =  os.path.join(output_path, args.sample + "_trim_log_file.txt")
-os.system(f"trimmomatic PE -threads {args.threads} --trimlog {trim_log_file} --summary {trim_summary_file} {fq_clean_1} {fq_clean_2} {fq_trimd_ispaired_1} {fq_trimd_unpaired_1} {fq_trimd_ispaired_2} {fq_trimd_unpaired_2} -phred33 LEADING:20 TRAILING:20 SLIDINGWINDOW:4:20 MINLEN:50")
+trim_err_file =  os.path.join(output_path, args.sample + "_trim.err")
+trim_log_file =  os.path.join(output_path, args.sample + "_trim.log")
+os.system(f"trimmomatic PE -threads {args.threads} {fq_clean_1} {fq_clean_2} {fq_trimd_ispaired_1} {fq_trimd_unpaired_1} {fq_trimd_ispaired_2} {fq_trimd_unpaired_2} -phred33 LEADING:20 TRAILING:20 SLIDINGWINDOW:4:20 MINLEN:50 2> {trim_err_file} 1> {trim_log_file}")
 
 # Map reads with BWA
 bwa_path = os.path.join(args.output_dir,"bwa")
@@ -85,7 +91,8 @@ gatk_metrics = os.path.join(gatk_path, f"{args.sample}.metrics.txt")
 os.system(f"gatk MarkDuplicates -I {bam_path_issorted} -O {gatk_dedup_bam} -M {gatk_metrics} --REMOVE_DUPLICATES true")
 
 # index all input files for gatk
-os.system(f"samtools faidx {fasta_file}")
+if not os.path.exists(fasta_file.with_suffix(".dict")):
+    os.system(f"gatk CreateSequenceDictionary -R {fasta_file}")
 os.system(f"samtools index {gatk_dedup_bam}")
 vcf_file = os.path.join(gatk_path, f"{args.sample}.vcf.gz")
 os.system(f"gatk Mutect2 -R {fasta_file} -I {gatk_dedup_bam} -O {vcf_file} --max-mnp-distance 2")
@@ -100,25 +107,12 @@ os.system(f"gatk FilterMutectCalls -R {fasta_file} -V {vcf_file} --min-reads-per
 csv_file = os.path.join(gatk_path, f"{args.sample}_filtered.csv.gz")
 os.system(f"gatk VariantsToTable -V {vcf_file_filtered} -F CHROM -F POS -F REF -F ALT -GF GT -GF AD -GF DP -O {csv_file}")
 
-
-# Get the gene IDs you want to filter for
-gene_ids = [
-"rpoB",
-"katG",
-"inhA",
-"ahpC",
-"rrs",
-"rpsL",
-"gidB",
-"embB",
-"embA",
-"embC",
-"pncA",
-]
-
-gb_record = SeqIO.parse(args.genbank, "genbank")
+# Read in the list of gene names to filter for from a text file
+with open(args.genes, "r") as f:
+    gene_names = [line.strip() for line in f.readlines()]
 
 # Get the positions of the genes from the GenBank file
+gb_record = SeqIO.parse(args.genbank, "genbank")
 gene_positions = {}
 for record in gb_record:
     for feature in record.features:
@@ -149,14 +143,14 @@ for record in vcf_reader:
         if record.POS >= positions[0] and record.POS <= positions[1]:
             filtered_vcf_records.append(record)
 
-# Write the filtered VCF records to a new VCF file
-vcf_output_file = "filtered.vcf"
-vcf_writer = vcfpy.Writer.from_path(vcf_output_file, vcf_reader.header)
-for record in filtered_vcf_records:
-    vcf_writer.write_record(record)
+# # Write the filtered VCF records to a new VCF file
+# vcf_output_file = "filtered.vcf"
+# vcf_writer = vcfpy.Writer.from_path(vcf_output_file, vcf_reader.header)
+# for record in filtered_vcf_records:
+#     vcf_writer.write_record(record)
 
-# Close the VCF writer
-vcf_writer.close()
+# # Close the VCF writer
+# vcf_writer.close()
 
 # Get the positions of the genes from the GenBank file
 # gene_positions = []
