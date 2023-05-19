@@ -12,15 +12,16 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 
 # Set up argument parser
-parser = argparse.ArgumentParser(description='Whole genome analysis pipeline')
-parser.add_argument('--fastq1', "-1", type=str, help='Path to first paired FASTQ file')
-parser.add_argument('--fastq2', "-2", type=str, help='Path to secnd paired FASTQ file')
-parser.add_argument('--sample', "-s", type=str, help='Sample name')
-parser.add_argument('--genbank', "-g", type=str, help='Path to reference genome GenBank file')
-parser.add_argument('--threads', "-t", type=int, default=4, help='Number of threads to use (default: %(default)i)')
-parser.add_argument('--output_dir', "-o", type=str, help='Path to output directory')
-parser.add_argument('--contaminant-db', "-c", type=str, help='Path to contaminant database')
-parser.add_argument('--genes', "-l", type=str, help='Text file with list of genes, one gene per row')
+parser = argparse.ArgumentParser(description='Whole genome analysis pipeline', prog="wgs_pipeline", formatter_class=lambda prog: argparse.HelpFormatter(prog,max_help_position=100))
+parser.add_argument('--fastq1', "-1", type=str, help='Path to first paired FASTQ file', required=True)
+parser.add_argument('--fastq2', "-2", type=str, help='Path to secnd paired FASTQ file', required=True)
+parser.add_argument('--sample', "-s", type=str, help='Sample name', required=True)
+parser.add_argument('--genbank', "-g", type=str, help='Path to reference genome GenBank file', required=True)
+parser.add_argument('--threads', "-t", type=int, default=4, help='Number of threads to use (default: %(default)i)', required=True)
+parser.add_argument('--output_dir', "-o", type=str, help='Path to output directory', required=True)
+parser.add_argument('--contaminant-db', "-c", type=str, help='Path to contaminant database', required=True)
+parser.add_argument('--genes', "-l", type=str, help='Text file with list of genes, one gene per row', required=True)
+parser.add_argument('--intervals', "-i", type=str, help='tsv file with (start, stop) information for genes', required=True)
 args = parser.parse_args()
 
 os.makedirs(args.output_dir, exist_ok =True)
@@ -91,7 +92,7 @@ gatk_metrics = os.path.join(gatk_path, f"{args.sample}.metrics.txt")
 os.system(f"gatk MarkDuplicates -I {bam_path_issorted} -O {gatk_dedup_bam} -M {gatk_metrics} --REMOVE_DUPLICATES true")
 
 # index all input files for gatk
-if not os.path.exists(fasta_file.with_suffix(".dict")):
+if not os.path.exists(pathlib.Path(fasta_file).with_suffix(".dict")):
     os.system(f"gatk CreateSequenceDictionary -R {fasta_file}")
 os.system(f"samtools index {gatk_dedup_bam}")
 vcf_file = os.path.join(gatk_path, f"{args.sample}.vcf.gz")
@@ -126,9 +127,8 @@ for record in gb_record:
                         gene_positions[gene] = (start, end)
 
 # Write the gene positions to a CSV file
-csv_output_file = "gene_positions.csv"
-with open(csv_output_file, "w", newline="") as f:
-    writer = csv.writer(f)
+with open(args.intervals, "w", newline="") as f:
+    writer = csv.writer(f, delimiter="\t")
     writer.writerow(["gene_name", "start_pos", "end_pos"])
     for gene_name, positions in gene_positions.items():
         writer.writerow([gene_name, positions[0], positions[1]])
