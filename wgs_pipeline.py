@@ -22,6 +22,7 @@ parser.add_argument('--output_dir', "-o", type=str, help='Path to output directo
 parser.add_argument('--contaminant-db', "-c", type=str, help='Path to contaminant database', required=True)
 parser.add_argument('--genes', "-l", type=str, help='Text file with list of genes, one gene per row', required=True)
 parser.add_argument('--intervals', "-i", type=str, help='tsv file with (start, stop) information for genes', required=True)
+parser.add_argument('--vcf', "-v", type=str, help='Output vcf file filtered for genes', required=True)
 args = parser.parse_args()
 
 os.makedirs(args.output_dir, exist_ok =True)
@@ -143,14 +144,13 @@ for record in vcf_reader:
         if record.POS >= positions[0] and record.POS <= positions[1]:
             filtered_vcf_records.append(record)
 
-# # Write the filtered VCF records to a new VCF file
-# vcf_output_file = "filtered.vcf"
-# vcf_writer = vcfpy.Writer.from_path(vcf_output_file, vcf_reader.header)
-# for record in filtered_vcf_records:
-#     vcf_writer.write_record(record)
+# Write the filtered VCF records to a new VCF file
+vcf_writer = vcfpy.Writer.from_path(args.vcf, vcf_reader.header)
+for record in filtered_vcf_records:
+    vcf_writer.write_record(record)
 
-# # Close the VCF writer
-# vcf_writer.close()
+# Close the VCF writer
+vcf_writer.close()
 
 # Get the positions of the genes from the GenBank file
 # gene_positions = []
