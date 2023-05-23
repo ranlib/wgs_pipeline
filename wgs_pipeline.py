@@ -174,3 +174,13 @@ vcf_writer.close()
 # # Do something with the filtered VCF records
 # for record in filtered_vcf_records:
 #     print(record)
+
+# annotate vcf with snpEff
+snp_eff_dir = os.path.join(args.output_dir, 'snp_eff_dir')
+os.makedirs( snp_eff_dir, exist_ok = True)
+database="snpEff/snpEff.config"
+file_name = os.path.basename(args.genbank)
+genome = os.path.splitext(file_name)[0]
+command = f"snpEff annotate -c {database} {genome} {vcf_file_filtered}"
+print(command)
+os.system(command)
