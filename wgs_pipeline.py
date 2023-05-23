@@ -178,9 +178,10 @@ vcf_writer.close()
 # annotate vcf with snpEff
 snp_eff_dir = os.path.join(args.output_dir, 'snp_eff_dir')
 os.makedirs( snp_eff_dir, exist_ok = True)
-database="snpEff/snpEff.config"
+
+database = "snpEff/snpEff.config"
 file_name = os.path.basename(args.genbank)
 genome = os.path.splitext(file_name)[0]
-command = f"snpEff annotate -c {database} {genome} {vcf_file_filtered}"
+command = f"snpEff -c {database} -csvStats stats.tsv {genome} {vcf_file_filtered} > filtered_annotated.vcf"
 print(command)
 os.system(command)
