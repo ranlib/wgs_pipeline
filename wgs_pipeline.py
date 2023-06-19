@@ -174,3 +174,14 @@ vcf_writer.close()
 # # Do something with the filtered VCF records
 # for record in filtered_vcf_records:
 #     print(record)
+
+# annotate vcf via snpEff
+snp_eff_dir = os.path.join(args.output_dir, 'snpEff')
+os.makedirs( snp_eff_dir, exist_ok = True)
+snp_eff_jar="/home/dbest/Software/snpEff/snpEff.jar"
+database = "snpEff/snpEff.config"
+file_name = os.path.basename(args.genbank)
+reference = os.path.splitext(file_name)[0]
+command = f"java -Xmx6G -jar {snp_eff_jar} -c {database} {reference} {vcf_file}"
+print(command)
+#os.system(command)
